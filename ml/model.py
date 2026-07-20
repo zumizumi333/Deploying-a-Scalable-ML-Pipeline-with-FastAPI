@@ -1,9 +1,12 @@
 import pickle
-from sklearn.metrics import fbeta_score, precision_score, recall_score
-from ml.data import process_data
-# TODO: add necessary import
+from pathlib import Path
 
-# Optional: implement hyperparameter tuning.
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import fbeta_score, precision_score, recall_score
+
+from ml.data import process_data
+
+
 def train_model(X_train, y_train):
     """
     Trains a machine learning model and returns it.
@@ -19,8 +22,9 @@ def train_model(X_train, y_train):
     model
         Trained machine learning model.
     """
-    # TODO: implement the function
-    pass
+    model = RandomForestClassifier(random_state=42, n_jobs=1)
+    model.fit(X_train, y_train)
+    return model
 
 
 def compute_model_metrics(y, preds):
@@ -59,8 +63,8 @@ def inference(model, X):
     preds : np.array
         Predictions from the model.
     """
-    # TODO: implement the function
-    pass
+    return model.predict(X)
+
 
 def save_model(model, path):
     """ Serializes model to a file.
@@ -72,23 +76,25 @@ def save_model(model, path):
     path : str
         Path to save pickle file.
     """
-    # TODO: implement the function
-    pass
+    output_path = Path(path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with output_path.open("wb") as model_file:
+        pickle.dump(model, model_file, protocol=pickle.HIGHEST_PROTOCOL)
+
 
 def load_model(path):
     """ Loads pickle file from `path` and returns it."""
-    # TODO: implement the function
-    pass
+    with Path(path).open("rb") as model_file:
+        return pickle.load(model_file)
 
 
 def performance_on_categorical_slice(
     data, column_name, slice_value, categorical_features, label, encoder, lb, model
 ):
-    """ Computes the model metrics on a slice of the data specified by a column name and
+    """Compute model metrics where a categorical column has a fixed value.
 
-    Processes the data using one hot encoding for the categorical features and a
-    label binarizer for the labels. This can be used in either training or
-    inference/validation.
+    The slice is processed with the encoder and label binarizer fitted on the
+    training data before predictions and metrics are computed.
 
     Inputs
     ------
@@ -117,12 +123,23 @@ def performance_on_categorical_slice(
     fbeta : float
 
     """
-    # TODO: implement the function
+    if column_name not in data.columns:
+        raise ValueError(f"Column not found in data: {column_name}")
+
+    slice_data = data.loc[data[column_name] == slice_value]
+    if slice_data.empty:
+        raise ValueError(
+            f"No rows found for {column_name}={slice_value!r}"
+        )
+
     X_slice, y_slice, _, _ = process_data(
-        # your code here
-        # for input data, use data in column given as "column_name", with the slice_value 
-        # use training = False
+        slice_data,
+        categorical_features=categorical_features,
+        label=label,
+        training=False,
+        encoder=encoder,
+        lb=lb,
     )
-    preds = None # your code here to get prediction on X_slice using the inference function
+    preds = inference(model, X_slice)
     precision, recall, fbeta = compute_model_metrics(y_slice, preds)
     return precision, recall, fbeta
