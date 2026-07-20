@@ -1,4 +1,4 @@
-import os
+from pathlib import Path
 
 import pandas as pd
 from sklearn.model_selection import train_test_split
@@ -12,18 +12,19 @@ from ml.model import (
     save_model,
     train_model,
 )
-# TODO: load the cencus.csv data
-project_path = "Your path here"
-data_path = os.path.join(project_path, "data", "census.csv")
-print(data_path)
-data = None # your code here
 
-# TODO: split the provided data to have a train dataset and a test dataset
-# Optional enhancement, use K-fold cross validation instead of a train-test split.
-train, test = None, None# Your code here
 
-# DO NOT MODIFY
-cat_features = [
+PROJECT_ROOT = Path(__file__).resolve().parent
+DATA_PATH = PROJECT_ROOT / "data" / "census.csv"
+MODEL_PATH = PROJECT_ROOT / "model" / "model.pkl"
+ENCODER_PATH = PROJECT_ROOT / "model" / "encoder.pkl"
+LABEL_BINARIZER_PATH = PROJECT_ROOT / "model" / "label_binarizer.pkl"
+SLICE_OUTPUT_PATH = PROJECT_ROOT / "slice_output.txt"
+LABEL = "salary"
+RANDOM_STATE = 42
+TEST_SIZE = 0.2
+
+CAT_FEATURES = [
     "workclass",
     "education",
     "marital-status",
@@ -34,54 +35,82 @@ cat_features = [
     "native-country",
 ]
 
-# TODO: use the process_data function provided to process the data.
-X_train, y_train, encoder, lb = process_data(
-    # your code here
-    # use the train dataset 
-    # use training=True
-    # do not need to pass encoder and lb as input
+
+def write_slice_performance(test, encoder, label_binarizer, model):
+    """Write metrics for every value of each categorical feature."""
+    with SLICE_OUTPUT_PATH.open("w", encoding="utf-8") as output_file:
+        for column in CAT_FEATURES:
+            for slice_value in sorted(test[column].unique()):
+                count = int((test[column] == slice_value).sum())
+                precision, recall, f1 = performance_on_categorical_slice(
+                    test,
+                    column_name=column,
+                    slice_value=slice_value,
+                    categorical_features=CAT_FEATURES,
+                    label=LABEL,
+                    encoder=encoder,
+                    lb=label_binarizer,
+                    model=model,
+                )
+                print(
+                    f"{column}: {slice_value}, Count: {count:,}",
+                    file=output_file,
+                )
+                print(
+                    "Precision: "
+                    f"{precision:.4f} | Recall: {recall:.4f} | F1: {f1:.4f}",
+                    file=output_file,
+                )
+
+
+def main():
+    """Train, evaluate, and persist the Census income classifier."""
+    data = pd.read_csv(DATA_PATH)
+    train, test = train_test_split(
+        data,
+        test_size=TEST_SIZE,
+        random_state=RANDOM_STATE,
+        stratify=data[LABEL],
     )
 
-X_test, y_test, _, _ = process_data(
-    test,
-    categorical_features=cat_features,
-    label="salary",
-    training=False,
-    encoder=encoder,
-    lb=lb,
-)
+    X_train, y_train, encoder, label_binarizer = process_data(
+        train,
+        categorical_features=CAT_FEATURES,
+        label=LABEL,
+        training=True,
+    )
+    X_test, y_test, _, _ = process_data(
+        test,
+        categorical_features=CAT_FEATURES,
+        label=LABEL,
+        training=False,
+        encoder=encoder,
+        lb=label_binarizer,
+    )
 
-# TODO: use the train_model function to train the model on the training dataset
-model = None # your code here
+    model = train_model(X_train, y_train)
+    save_model(model, MODEL_PATH)
+    save_model(encoder, ENCODER_PATH)
+    save_model(label_binarizer, LABEL_BINARIZER_PATH)
+    print(f"Model saved to {MODEL_PATH.relative_to(PROJECT_ROOT)}")
+    print(f"Encoder saved to {ENCODER_PATH.relative_to(PROJECT_ROOT)}")
+    print(
+        "Label binarizer saved to "
+        f"{LABEL_BINARIZER_PATH.relative_to(PROJECT_ROOT)}"
+    )
 
-# save the model and the encoder
-model_path = os.path.join(project_path, "model", "model.pkl")
-save_model(model, model_path)
-encoder_path = os.path.join(project_path, "model", "encoder.pkl")
-save_model(encoder, encoder_path)
+    saved_model = load_model(MODEL_PATH)
+    predictions = inference(saved_model, X_test)
+    precision, recall, f1 = compute_model_metrics(y_test, predictions)
+    print(
+        f"Precision: {precision:.4f} | Recall: {recall:.4f} | F1: {f1:.4f}"
+    )
 
-# load the model
-model = load_model(
-    model_path
-) 
+    write_slice_performance(test, encoder, label_binarizer, saved_model)
+    print(f"Slice metrics saved to {SLICE_OUTPUT_PATH.relative_to(PROJECT_ROOT)}")
 
-# TODO: use the inference function to run the model inferences on the test dataset.
-preds = None # your code here
+    return precision, recall, f1
 
-# Calculate and print the metrics
-p, r, fb = compute_model_metrics(y_test, preds)
-print(f"Precision: {p:.4f} | Recall: {r:.4f} | F1: {fb:.4f}")
 
-# TODO: compute the performance on model slices using the performance_on_categorical_slice function
-# iterate through the categorical features
-for col in cat_features:
-    # iterate through the unique values in one categorical feature
-    for slicevalue in sorted(test[col].unique()):
-        count = test[test[col] == slicevalue].shape[0]
-        p, r, fb = performance_on_categorical_slice(
-            # your code here
-            # use test, col and slicevalue as part of the input
-        )
-        with open("slice_output.txt", "a") as f:
-            print(f"{col}: {slicevalue}, Count: {count:,}", file=f)
-            print(f"Precision: {p:.4f} | Recall: {r:.4f} | F1: {fb:.4f}", file=f)
+if __name__ == "__main__":
+    main()
