@@ -1,18 +1,10 @@
-import json
-
 import requests
 
-# TODO: send a GET using the URL http://127.0.0.1:8000
-r = None # Your code here
 
-# TODO: print the status code
-# print()
-# TODO: print the welcome message
-# print()
+BASE_URL = "http://127.0.0.1:8000"
+REQUEST_TIMEOUT = 10
 
-
-
-data = {
+SAMPLE_DATA = {
     "age": 37,
     "workclass": "Private",
     "fnlgt": 178356,
@@ -29,10 +21,25 @@ data = {
     "native-country": "United-States",
 }
 
-# TODO: send a POST using the data above
-r = None # Your code here
 
-# TODO: print the status code
-# print()
-# TODO: print the result
-# print()
+def main():
+    """Send one GET and one inference POST to the local API."""
+    get_response = requests.get(BASE_URL, timeout=REQUEST_TIMEOUT)
+    print("GET request")
+    print(f"Status Code: {get_response.status_code}")
+    get_response.raise_for_status()
+    print(f"Result: {get_response.json()}")
+
+    post_response = requests.post(
+        f"{BASE_URL}/data/",
+        json=SAMPLE_DATA,
+        timeout=REQUEST_TIMEOUT,
+    )
+    print("\nPOST request")
+    print(f"Status Code: {post_response.status_code}")
+    post_response.raise_for_status()
+    print(f"Result: {post_response.json()['result']}")
+
+
+if __name__ == "__main__":
+    main()
